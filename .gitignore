@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*build/
+*develop-eggs/
+*dist/
+*downloads/
+*eggs/
+*.egg-info/
+*htmlcov/
+*.manifest
+*.spec
+*pip-log.txt
+*pip-delete-this-directory.txt
+*instance/
+*site/
+*var/
+*.sqlite3
+*.db.sqlite3
+*.DS_Store
+
+# Virtualenv
+.env
+.venv
+env/
+venv/
+ENV/
+VENV/
+lib/
+lib64/
+include/
+share/
+bin/
+
+# IDEs
+.vscode/
+.idea/
+
+# Output files
+schedule.json
+debug_cells.txt
