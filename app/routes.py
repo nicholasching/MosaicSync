@@ -1,5 +1,5 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, session
-from datetime import datetime, timedelta # Added timedelta here
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, session, jsonify
+from datetime import datetime, timedelta
 import os
 import json
 import time
@@ -71,12 +71,29 @@ def oauth2callback():
         current_app.logger.warning("OAuth2 callback processed, but token file was not found.")
     return redirect(url_for('.index'))
 
+@main_bp.route('/reset_progress', methods=['POST'])
+def reset_progress():
+    """Reset the import progress data in the session."""
+    session.pop('import_progress', None)
+    return jsonify({'status': 'success'})
+
+@main_bp.route('/get_import_progress')
+def get_import_progress():
+    """Get the current import progress data from the session."""
+    # Default progress data if none exists in session
+    default_data = {'message': 'No import in progress', 'percentage': 0, 'status': 'not_started'}
+    progress_data = session.get('import_progress', default_data)
+    return jsonify(progress_data)
 
 @main_bp.route('/import_schedule', methods=['POST'])
 def import_schedule():
     current_app.logger.info("Import schedule route called.")
+    # Reset progress data at the start of a new import
+    session['import_progress'] = {'message': 'Starting import process...', 'percentage': 0, 'status': 'running'}
+    
     if not os.path.exists(current_app.config['TOKEN_FILE']):
         flash("Google Calendar not authorized. Please authorize first.", "danger")
+        session['import_progress'] = {'message': 'Error: Google Calendar not authorized.', 'percentage': 0, 'status': 'error'}
         return redirect(url_for('.index'))
 
     macid = request.form.get('macid')
@@ -86,64 +103,72 @@ def import_schedule():
 
     if not all([macid, password, start_date_str, end_date_str]):
         flash("All fields are required.", "danger")
+        session['import_progress'] = {'message': 'Error: Missing required fields.', 'percentage': 0, 'status': 'error'}
         return redirect(url_for('.index'))
 
     try:
         start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
         end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+        session['import_progress'] = {'message': 'Validated input dates.', 'percentage': 5, 'status': 'running'}
     except ValueError:
         flash("Invalid date format. Please use YYYY-MM-DD.", "danger")
+        session['import_progress'] = {'message': 'Error: Invalid date format.', 'percentage': 0, 'status': 'error'}
         return redirect(url_for('.index'))
 
-    current_app.logger.info(f"Starting schedule import for {macid} from {start_date_str} to {end_date_str}")
-    
-    # --- Run Scraper ---
     all_schedule_data = []
-    driver = None # Initialize driver to None for finally block
+    driver = None
     try:
-        current_app.logger.info("Setting up Selenium driver.")
-        # Update scraper to accept start/end dates and credentials as parameters
-        # For now, we assume scraper.py might still use its internal START_DATE, END_DATE or env vars
-        # This needs to be refactored in scraper.py to accept these as arguments to its main/new function
-        
-        # --- Modification for scraper.py to accept parameters ---
-        # Option 1: Modify scraper.main() to accept parameters (preferred)
-        # Option 2: Set environment variables here (less ideal for web app context)
-        
-        # For now, let's assume a function `run_scraper(username, password, start_dt, end_dt)` exists in scraper.py
-        # This is a placeholder for the actual integration.
-        # You'll need to adjust scraper.py to provide such a function.
-        
-        # --- Placeholder for actual scraper call ---
-        # This is where you would call your scraper's main logic.
-        # For demonstration, let's simulate it or try to call the existing main.
-        # To properly integrate, scraper.py's main() or a new function should:
-        # 1. Accept username, password, start_date, end_date as arguments.
-        # 2. Return the scraped data instead of just writing to a file.
-        
-        # --- Temporary: Using a direct call to scraper functions (requires scraper.py refactoring) ---
+        session['import_progress'] = {'message': 'Setting up browser driver...', 'percentage': 10, 'status': 'running'}
         current_app.logger.info("Initializing WebDriver...")
         driver = scraper.setup_driver()
+        
+        session['import_progress'] = {'message': 'Logging into portal...', 'percentage': 15, 'status': 'running'}
         scraper.login_to_portal(driver, macid, password)
-        scraper.navigate_to_weekly_schedule(driver) # Navigates and stays in iframe initially
+        
+        session['import_progress'] = {'message': 'Navigating to weekly schedule page...', 'percentage': 20, 'status': 'running'}
+        scraper.navigate_to_weekly_schedule(driver) 
 
-        current_monday = start_date - timedelta(days=start_date.weekday()) # Ensure start is a Monday: For some reason, the first week of the term is not correctly parsed by the scraper, so start one week earlier
+        current_monday = start_date - timedelta(days=start_date.weekday())
         loop_end_date = end_date
 
-        driver.switch_to.default_content()
+        driver.switch_to.default_content()  # This is important! Otherwise, the first week will not be scraped correctly.
+        total_weeks = (loop_end_date - current_monday).days // 7 + 1
+        if total_weeks <= 0: total_weeks = 1  # Avoid division by zero
+
+        weeks_processed = 0
+        scraper_progress_start_percentage = 30
+        scraper_progress_range = 40  # Percentage allocated for scraping
 
         while current_monday <= loop_end_date:
-            current_app.logger.info(f"Scraping week starting {current_monday.strftime('%Y-%m-%d')}")
+            weeks_processed += 1
+            current_progress_percentage = scraper_progress_start_percentage
+            if total_weeks > 0:
+                current_progress_percentage += int((weeks_processed / total_weeks) * scraper_progress_range)
+            
+            session['import_progress'] = {
+                'message': f'Scraping week {weeks_processed}/{total_weeks} (starting {current_monday.strftime("%Y-%m-%d")})...',
+                'percentage': current_progress_percentage,
+                'status': 'running'
+            }
+            
             weekly_events = scraper.scrape_week_data(driver, current_monday)
             if weekly_events:
                 all_schedule_data.extend(weekly_events)
             current_monday += timedelta(days=7)
         
-        current_app.logger.info(f"Scraping complete. Found {len(all_schedule_data)} events.")
-        # --- End of temporary scraper call ---
+        session['import_progress'] = {
+            'message': f'Scraping complete. Found {len(all_schedule_data)} events. Processing...',
+            'percentage': scraper_progress_start_percentage + scraper_progress_range,
+            'status': 'running'
+        }
 
     except Exception as e:
         current_app.logger.error(f"Error during scraping process: {e}", exc_info=True)
+        session['import_progress'] = {
+            'message': f'Error during scraping: {str(e)}',
+            'percentage': session.get('import_progress', {}).get('percentage', 20),
+            'status': 'error'
+        }
         flash(f"An error occurred during scraping: {e}", "danger")
         return redirect(url_for('.index'))
     finally:
@@ -153,19 +178,43 @@ def import_schedule():
 
     if not all_schedule_data:
         flash("No schedule data found for the given dates.", "info")
+        session['import_progress'] = {
+            'message': 'No schedule data found for the given dates.',
+            'percentage': 100,
+            'status': 'complete_with_info'
+        }
         return redirect(url_for('.index'))
 
-    # --- Add to Google Calendar ---
+    session['import_progress'] = {'message': 'Connecting to Google Calendar...', 'percentage': 75, 'status': 'running'}
     gcal = gcal_service.get_calendar_service()
     if not gcal:
         flash("Could not connect to Google Calendar service. Please try authorizing again.", "danger")
+        session['import_progress'] = {
+            'message': 'Error: Could not connect to Google Calendar.',
+            'percentage': 75,
+            'status': 'error'
+        }
         return redirect(url_for('.index'))
 
     events_created_count = 0
     events_failed_count = 0
-    for event_data in all_schedule_data:
+    total_events_to_create = len(all_schedule_data)
+    
+    gcal_progress_start_percentage = 80
+    gcal_progress_range = 20  # Percentage allocated for calendar operations
+
+    for i, event_data in enumerate(all_schedule_data):
+        current_gcal_progress = gcal_progress_start_percentage
+        if total_events_to_create > 0:
+            current_gcal_progress += int(((i + 1) / total_events_to_create) * gcal_progress_range)
+
+        session['import_progress'] = {
+            'message': f'Adding event {i+1}/{total_events_to_create} to Google Calendar ({event_data.get("course", "Event")})...',
+            'percentage': current_gcal_progress,
+            'status': 'running'
+        }
+        
         try:
-            # Ensure event_data['time'] and event_data['date'] are present and correct
             if 'time' not in event_data or 'date' not in event_data:
                 current_app.logger.warning(f"Skipping event due to missing time/date: {event_data}")
                 events_failed_count += 1
@@ -179,10 +228,18 @@ def import_schedule():
         except Exception as e:
             current_app.logger.error(f"Error creating calendar event for {event_data.get('course')}: {e}", exc_info=True)
             events_failed_count += 1
-            
-    flash(f"Successfully created {events_created_count} events in Google Calendar. Failed to create {events_failed_count} events.", "success" if events_created_count > 0 else "warning")
-    current_app.logger.info(f"Calendar import finished. Created: {events_created_count}, Failed: {events_failed_count}")
 
+    final_message = f"Successfully created {events_created_count} events. Failed: {events_failed_count} events."
+    if events_created_count == 0 and events_failed_count > 0:
+        final_status = 'error'
+    elif events_failed_count > 0:
+        final_status = 'complete_with_warnings'
+    else:
+        final_status = 'complete'
+    
+    session['import_progress'] = {'message': final_message, 'percentage': 100, 'status': final_status}
+    flash(final_message, "success" if final_status == 'complete' else "warning")
+    
     return redirect(url_for('.index'))
 
 # Need to register this blueprint in app/__init__.py
