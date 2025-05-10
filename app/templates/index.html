@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Import Schedule{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <h1>Import Your Schedule to Google Calendar</h1>
+        <p class="lead">Enter your ERP credentials and the date range for the schedule you want to import.</p>
+        
+        {% if not gcal_authorized %}
+            <div class="alert alert-warning" role="alert">
+                You need to authorize this application to access your Google Calendar.
+                <a href="{{ url_for('main.authorize_gcal') }}" class="btn btn-primary btn-sm ml-2">Authorize Google Calendar</a>
+            </div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('main.import_schedule') }}">
+            <div class="form-group">
+                <label for="macid">MACID (Username)</label>
+                <input type="text" class="form-control" id="macid" name="macid" value="{{ macid_user if macid_user }}" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" class="form-control" id="password" name="password" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="start_date">Start Date</label>
+                    <input type="date" class="form-control" id="start_date" name="start_date" value="{{ default_start_date }}" required>
+                </div>
+                <div class="form-group col-md-6">
+                    <label for="end_date">End Date</label>
+                    <input type="date" class="form-control" id="end_date" name="end_date" value="{{ default_end_date }}" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-success" {% if not gcal_authorized %}disabled{% endif %}>Import Schedule</button>
+        </form>
+
+        <div id="status-messages" class="mt-4">
+            <!-- Messages from the import process will appear here -->
+        </div>
+    </div>
+{% endblock %}

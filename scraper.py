@@ -2,113 +2,106 @@
 from datetime import datetime, timedelta
 import os, json, re
 import time
+import logging
 from selenium.webdriver.common.keys import Keys
-from dotenv import load_dotenv, dotenv_values
+from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
 
+# --- Configuration & Setup ---
 load_dotenv() # Load environment variables from .env file
 
-MACID     = os.environ["MACID_USER"]                            # store creds in env vars or a secrets vault
-PASSWORD  = os.environ["MACID_PASS"]
-START     = datetime(2025,  1,  6) - timedelta(days=7)        # first Monday of term: For some reason, the first week of the term is not correctly parsed by the scraper, so start one week earlier
-END       = datetime(2025,  4, 13)                            # last Sunday  of term
+MACID = os.environ.get("MACID_USER")
+PASSWORD = os.environ.get("MACID_PASS")
+# For some reason, the first week of the term is not correctly parsed by the scraper, so start one week earlier (this is currently a workaround and done in routes.py)
+START_DATE = datetime(2025, 1, 6)
+END_DATE = datetime(2025, 1, 12)
 
-driver = webdriver.Chrome()               # or Edge/Firefox
-driver.get("https://csprd.mcmaster.ca/psp/prcsprd/?cmd=login")  # login page
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# ---- 1) log in --------------------------------------------------------------
-driver.find_element(By.ID, "userid").send_keys(MACID)
-driver.find_element(By.ID, "pwd").send_keys(PASSWORD)
-driver.find_element(By.NAME, "Submit").click()
 
-# Duo or SSO step here?  Selenium will wait while you approve on your phone.
-WebDriverWait(driver, 90).until(
-    EC.title_contains("Homepage")
-)
+def setup_driver():
+    """Initializes and returns the Selenium WebDriver."""
+    # chrome_options = Options()
+    # chrome_options.add_argument("--headless")
+    # chrome_options.add_argument("--disable-gpu")
+    # driver = webdriver.Chrome(options=chrome_options)
+    driver = webdriver.Chrome()  # or Edge/Firefox
+    return driver
 
-# ---- 2) open My Weekly Schedule --------------------------------------------
-driver.get(
-    "https://csprd.mcmaster.ca/psp/prcsprd/EMPLOYEE/SA/c/SA_LEARNER_SERVICES.SSS_STUDENT_CENTER.GBL?"  # exact URL may vary
-)
 
-# 1) switch to the main content iframe first
-WebDriverWait(driver, 10).until(
-    EC.frame_to_be_available_and_switch_to_it((By.NAME, "TargetContent"))
-)
-# (the frame is sometimes named "TargetContent", "ptifrmtgtframe", or has id="TargetContent";
-#  adjust the locator if your instance uses a different name/id)
+def login_to_portal(driver, username, password):
+    """Logs into the McMaster portal."""
+    logging.info("Navigating to login page.")
+    driver.get("https://csprd.mcmaster.ca/psp/prcsprd/?cmd=login")
+    try:
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "userid")))
+        driver.find_element(By.ID, "userid").send_keys(username)
+        driver.find_element(By.ID, "pwd").send_keys(password)
+        driver.find_element(By.NAME, "Submit").click()
+        logging.info("Login submitted. Waiting for homepage.")
+        WebDriverWait(driver, 90).until(EC.title_contains("Homepage"))
+        logging.info("Login successful.")
+    except TimeoutException:
+        logging.error("Timeout during login process.")
+        raise
+    except NoSuchElementException:
+        logging.error("Login form element not found.")
+        raise
 
-# 2) find the <a> that triggers the schedule page
-weekly_link = WebDriverWait(driver, 10).until(
-    EC.element_to_be_clickable((By.ID, "DERIVED_SSS_SCL_SS_WEEKLY_SCHEDULE"))
-)
-time.sleep(1)
 
-# 3) click it
-weekly_link.click()
-
-# …do whatever you need on the Weekly Schedule page…
-
-# when you’re done and need to access something outside the iframe:
-driver.switch_to.default_content()
-time.sleep(1)
-
-weeks_data = []
-cur = START
-
-while cur <= END:
-
-    WebDriverWait(driver, 10).until(
-        EC.frame_to_be_available_and_switch_to_it((By.NAME, "TargetContent"))
+def navigate_to_weekly_schedule(driver):
+    """Navigates to the 'My Weekly Schedule' page."""
+    logging.info("Navigating to student center.")
+    driver.get(
+        "https://csprd.mcmaster.ca/psp/prcsprd/EMPLOYEE/SA/c/SA_LEARNER_SERVICES.SSS_STUDENT_CENTER.GBL?"
     )
+    try:
+        logging.info("Switching to main content iframe.")
+        WebDriverWait(driver, 10).until(
+            EC.frame_to_be_available_and_switch_to_it((By.NAME, "TargetContent"))
+        )
+        logging.info("Locating weekly schedule link.")
+        weekly_link = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.ID, "DERIVED_SSS_SCL_SS_WEEKLY_SCHEDULE"))
+        )
+        time.sleep(1) # Brief pause before click
+        weekly_link.click()
+        logging.info("Clicked weekly schedule link.")
+        # The page is now within the iframe. We'll switch back to default_content after processing each week.
+    except TimeoutException:
+        logging.error("Timeout navigating to weekly schedule or finding elements.")
+        driver.switch_to.default_content() # Ensure we are not stuck in an iframe on error
+        raise
+    except NoSuchElementException:
+        logging.error("Element not found during schedule navigation.")
+        driver.switch_to.default_content() # Ensure we are not stuck in an iframe on error
+        raise
 
-    # 2a) put Monday’s date into “Show Week of”
-    date_box = driver.find_element(By.ID, "DERIVED_CLASS_S_START_DT")
 
-    current_value_len = len(date_box.get_attribute('value'))
-    for _ in range(current_value_len):
-            date_box.send_keys(Keys.BACKSPACE)
-            # time.sleep(0.05) # Optional small delay if needed
-
-    # Optional short pause after clearing
-    time.sleep(0.5)
-
-    # 2a) put Monday’s date into “Show Week of”
-    date_box.send_keys(cur.strftime("%d/%m/%Y"))
-    # Optional short pause after sending keys
-    time.sleep(0.5)
-
-
-    # 2b) click Refresh
-    driver.find_element(By.ID, "DERIVED_CLASS_S_SSR_REFRESH_CAL$8$").click()
-    WebDriverWait(driver, 10).until(
-        EC.text_to_be_present_in_element_value((By.ID, "DERIVED_CLASS_S_START_DT"), cur.strftime("%d/%m/%Y"))
-    )
-
-    # REQUIRED: wait for the page to load completely before parsing
-    time.sleep(1)
-
-    # 2c) parse the weekly table
-    soup = BeautifulSoup(driver.page_source, "html.parser")
-
-    # Correct selector based on inspecting the HTML:
-    # Selects table cells (td) within the main schedule table that have a class containing 'PSLEVEL3GRID'
+def parse_html_to_events(soup, base_date_for_week):
+    """Parses the HTML soup of a weekly schedule table and extracts event data."""
+    events_this_week = []
     selector = "table#WEEKLY_SCHED_HTMLAREA td[class*='PSLEVEL3GRID']"
-    print(f"DEBUG: Using selector: '{selector}'")
+    logging.debug(f"Using selector: '{selector}' for date: {base_date_for_week.strftime('%Y-%m-%d')}")
 
     offset = -2
     count = 0
+    delayArr = [0, 0, 0, 0, 0, 0, 0] # To handle rowspan for events spanning multiple time slots on the same day
 
-    delayArr = [0, 0, 0, 0, 0, 0, 0]
+    cells = soup.select(selector)
+    if not cells:
+        logging.warning(f"No schedule cells found for week starting {base_date_for_week.strftime('%Y-%m-%d')}. The page might be empty or structure changed.")
+        return events_this_week
 
-    # Now 'cell' will be a <td> element containing schedule info
-    for cell in soup.select(selector):
-        print(f"DEBUG: Found cell: {cell}")
+    for cell in cells:
+        logging.debug(f"Raw cell: {cell}")
 
         if (offset > 5 and count == 0):
             offset -= 6
@@ -118,9 +111,9 @@ while cur <= END:
             count = 0
         else:
             offset += 1
-
+        
         while (delayArr[offset % len(delayArr)] > 0):
-            print(f"DEBUG: Before Offset: {offset}; Delay: {delayArr[offset % len(delayArr)]}")
+            logging.debug(f"Before Offset: {offset}; Delay: {delayArr[offset % len(delayArr)]}")
             delayArr[offset % len(delayArr)] -= 1
             if (offset < 6):
                 offset = offset + 1
@@ -130,66 +123,155 @@ while cur <= END:
             elif (offset > 5 and count == 1):
                 offset -= 7 - 1
                 count = 0
-
-        print(offset)
-        print(cur + timedelta(days=offset))
         
-        # Extract all text pieces from the cell and join them
-        text = " ".join(cell.stripped_strings)
+        logging.debug(f"Current offset: {offset}, Calculated date: {base_date_for_week + timedelta(days=offset)}")
 
-        # Skip empty cells or cells that only contain non-breaking spaces
+        text = " ".join(cell.stripped_strings)
         if not text or text.isspace():
             continue
 
-        print(f"DEBUG: Processing text: '{text}'")
-        # Adjusted regex to handle course code, section, 24-hour time, and 'Laboratory' type
-        # Example: ENGINEER    1P13B - C01 Lecture 09:30 - 10:20 Peter George Centre for L&L M21
+        logging.debug(f"Processing text: '{text}'")
         m = re.match(
-            r"(?P<course>[A-Z\s]+\s+\w+)\s+-\s+\w+\s+"  # Course Name/Code (e.g., "ENGINEER    1P13B") then skip section ("- C01")
-            r"(?P<type>Lecture|Tutorial|Lab|Laboratory|Core)\s+"  # Type
-            r"(?P<time>\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2})\s+"  # Time (e.g., "09:30 - 10:20")
-            r"(?P<location>.+)",  # Location
-            text, 
+            r"(?P<course>[A-Z\s]+\s+\w+)\s+-\s+\w+\s+"
+            r"(?P<type>Lecture|Tutorial|Lab|Laboratory|Core)\s+"
+            r"(?P<time>\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2})\s+"
+            r"(?P<location>.+)",
+            text,
             re.IGNORECASE | re.DOTALL
         )
 
-        # Extract the "rowspan" property of the parent <td> element
-        rowspan = int(cell.get("rowspan", "1"))  # Default to "1" if rowspan is not present
+        rowspan = int(cell.get("rowspan", "1"))
 
-        # Add rowspan to the JSON output
         if m:
-            print(f"DEBUG: Match found: {m.groupdict()}, rowspan: {rowspan}")
-            event_date = cur + timedelta(days=offset)
-            
+            event_date = base_date_for_week + timedelta(days=offset)
             course_details = m.groupdict()
-            
-            # Clean the course name: replace multiple spaces with a single space
             if 'course' in course_details and course_details['course']:
-                # Replace any sequence of one or more whitespace characters with a single space,
-                # and trim leading/trailing whitespace.
                 course_details['course'] = re.sub(r'\s+', ' ', course_details['course']).strip()
             
-            weeks_data.append({
-                "week_of": cur.strftime("%Y-%m-%d"),
+            events_this_week.append({
+                "week_of": base_date_for_week.strftime("%Y-%m-%d"),
                 "date": event_date.strftime("%Y-%m-%d"),
                 **course_details
             })
+            logging.debug(f"Match found: {course_details}, rowspan: {rowspan}, date: {event_date.strftime('%Y-%m-%d')}")
         else:
-            print(f"DEBUG: No match for text: '{text}', rowspan: {rowspan}")
+            logging.debug(f"No match for text: '{text}', rowspan: {rowspan}")
 
-        if (rowspan > 1 and offset != -1):
-            delayArr[offset % len(delayArr)] = rowspan - 1
+        if (rowspan > 1 and offset != -1): # Ensure offset is valid index
+             # This logic for rowspan seems to be for events that span multiple *time slots* on the *same day*.
+             # The original delayArr logic might need review if it's intended for multi-day events.
+             # For now, replicating existing logic.
+            if 0 <= (offset % len(delayArr)) < len(delayArr):
+                 delayArr[offset % len(delayArr)] = rowspan - 1
+            else:
+                logging.warning(f"Invalid offset {offset} for delayArr access.")
 
-    cur += timedelta(days=7)
 
-    # when you’re done and need to access something outside the iframe:
-    driver.switch_to.default_content()
-    time.sleep(1)
+    return events_this_week
 
-driver.quit()
 
-# ---- 3) save ----------------------------------------------------------------
-with open("schedule.json", "w", encoding="utf-8") as f:
-    json.dump(weeks_data, f, indent=2)
-print("Wrote", len(weeks_data), "meeting blocks to schedule.json")
-print("Done!")
+def scrape_week_data(driver, current_monday):
+    """Inputs date, refreshes schedule, and parses data for the given week."""
+    logging.info(f"Scraping week of: {current_monday.strftime('%d/%m/%Y')}")
+    try:
+        # Ensure we are in the correct iframe for date input and refresh
+        WebDriverWait(driver, 10).until(
+            EC.frame_to_be_available_and_switch_to_it((By.NAME, "TargetContent"))
+        )
+
+        date_box = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, "DERIVED_CLASS_S_START_DT"))
+        )
+        
+        # Clear the date box
+        current_value_len = len(date_box.get_attribute('value'))
+        for _ in range(current_value_len):
+            date_box.send_keys(Keys.BACKSPACE)
+        time.sleep(0.2) # Short pause after clearing
+
+        date_box.send_keys(current_monday.strftime("%d/%m/%Y"))
+        time.sleep(0.2) # Short pause after sending keys
+
+        driver.find_element(By.ID, "DERIVED_CLASS_S_SSR_REFRESH_CAL$8$").click()
+        WebDriverWait(driver, 1).until(
+            EC.text_to_be_present_in_element_value((By.ID, "DERIVED_CLASS_S_START_DT"), current_monday.strftime("%d/%m/%Y"))
+        )
+        logging.info(f"Refreshed schedule for week: {current_monday.strftime('%d/%m/%Y')}")
+        time.sleep(1) # Wait for page to load completely
+
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        weekly_events = parse_html_to_events(soup, current_monday)
+        
+        driver.switch_to.default_content() # Switch out of iframe
+        time.sleep(0.5) # Brief pause after switching from iframe
+        return weekly_events
+
+    except TimeoutException:
+        logging.error(f"Timeout during scraping week {current_monday.strftime('%d/%m/%Y')}.")
+        driver.switch_to.default_content() # Ensure we are not stuck in an iframe on error
+        return [] # Return empty list on error for this week
+    except NoSuchElementException:
+        logging.error(f"Element not found during scraping week {current_monday.strftime('%d/%m/%Y')}.")
+        driver.switch_to.default_content() # Ensure we are not stuck in an iframe on error
+        return [] # Return empty list on error for this week
+    except Exception as e:
+        logging.error(f"An unexpected error occurred during scraping week {current_monday.strftime('%d/%m/%Y')}: {e}")
+        driver.switch_to.default_content() # Ensure we are not stuck in an iframe on error
+        return []
+
+
+def main():
+    """Main function to orchestrate the scraping process."""
+    if not MACID or not PASSWORD:
+        logging.error("MACID_USER and MACID_PASS environment variables must be set.")
+        return
+
+    driver = setup_driver()
+    all_schedule_data = []
+    try:
+        login_to_portal(driver, MACID, PASSWORD)
+        navigate_to_weekly_schedule(driver) # Navigates and stays in iframe initially
+
+        current_monday = START_DATE
+        while current_monday <= END_DATE:
+            # The navigate_to_weekly_schedule leaves us in the iframe.
+            # scrape_week_data expects to switch into TargetContent itself,
+            # and switches out after it's done.
+            # So, before the first call and between calls, we should be in default_content.
+            # The first call to navigate_to_weekly_schedule handles getting into the iframe.
+            # Subsequent calls to scrape_week_data will handle iframe switching internally.
+
+            # If not the first iteration, ensure we are in default content before scrape_week_data
+            # (which will then switch into the iframe)
+            if current_monday != START_DATE:
+                 pass # scrape_week_data handles iframe switching
+
+            weekly_events = scrape_week_data(driver, current_monday)
+            if weekly_events:
+                all_schedule_data.extend(weekly_events)
+            
+            current_monday += timedelta(days=7)
+            # No need for explicit sleep here if WebDriverWait is used effectively within scrape_week_data
+            # However, a small politeness delay can be added if desired.
+            # time.sleep(1)
+
+
+    except Exception as e:
+        logging.error(f"An error occurred in the main process: {e}")
+    finally:
+        logging.info("Closing browser.")
+        driver.quit()
+
+    if all_schedule_data:
+        output_filename = "schedule.json"
+        with open(output_filename, "w", encoding="utf-8") as f:
+            json.dump(all_schedule_data, f, indent=2)
+        logging.info(f"Wrote {len(all_schedule_data)} meeting blocks to {output_filename}")
+    else:
+        logging.info("No schedule data was scraped.")
+    
+    logging.info("Done!")
+
+
+if __name__ == "__main__":
+    main()

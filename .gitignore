@@ -38,6 +38,5 @@ bin/
 .vscode/
 .idea/
 
-# Output files
-schedule.json
-debug_cells.txt
+# Data
+*.json
