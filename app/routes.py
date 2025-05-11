@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import os
 import json
 import time
+import uuid
 
 # Assuming your refactored scraper and gcal_service are in the parent directory
 # Adjust the import paths if your project structure is different or if they become packages
@@ -13,6 +14,7 @@ if parent_dir not in sys.path:
 
 import scraper # Your refactored scraper.py
 import gcal_service # Your gcal_service.py
+from .task_manager import start_import_task, get_task_progress
 
 # Using a Blueprint for routes. 'main' is the name of the blueprint.
 main_bp = Blueprint('main', __name__)
@@ -73,27 +75,36 @@ def oauth2callback():
 
 @main_bp.route('/reset_progress', methods=['POST'])
 def reset_progress():
-    """Reset the import progress data in the session."""
-    session.pop('import_progress', None)
+    """Reset the import progress data."""
+    # Generate a unique session ID for tracking this import
+    session['import_session_id'] = str(uuid.uuid4())
     return jsonify({'status': 'success'})
 
 @main_bp.route('/get_import_progress')
 def get_import_progress():
-    """Get the current import progress data from the session."""
-    # Default progress data if none exists in session
-    default_data = {'message': 'No import in progress', 'percentage': 0, 'status': 'not_started'}
-    progress_data = session.get('import_progress', default_data)
+    """Get the current import progress data."""
+    # If no session ID exists, return default "not started" state
+    session_id = session.get('import_session_id')
+    if not session_id:
+        default_data = {'message': 'No import in progress', 'percentage': 0, 'status': 'not_started'}
+        return jsonify(default_data)
+    
+    # Get progress from the task manager
+    progress_data = get_task_progress(session_id)
     return jsonify(progress_data)
 
 @main_bp.route('/import_schedule', methods=['POST'])
 def import_schedule():
     current_app.logger.info("Import schedule route called.")
-    # Reset progress data at the start of a new import
-    session['import_progress'] = {'message': 'Starting import process...', 'percentage': 0, 'status': 'running'}
+    
+    # Ensure we have a session ID for tracking this import
+    if 'import_session_id' not in session:
+        session['import_session_id'] = str(uuid.uuid4())
+    
+    session_id = session['import_session_id']
     
     if not os.path.exists(current_app.config['TOKEN_FILE']):
         flash("Google Calendar not authorized. Please authorize first.", "danger")
-        session['import_progress'] = {'message': 'Error: Google Calendar not authorized.', 'percentage': 0, 'status': 'error'}
         return redirect(url_for('.index'))
 
     macid = request.form.get('macid')
@@ -103,144 +114,22 @@ def import_schedule():
 
     if not all([macid, password, start_date_str, end_date_str]):
         flash("All fields are required.", "danger")
-        session['import_progress'] = {'message': 'Error: Missing required fields.', 'percentage': 0, 'status': 'error'}
         return redirect(url_for('.index'))
 
     try:
         start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
         end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
-        session['import_progress'] = {'message': 'Validated input dates.', 'percentage': 5, 'status': 'running'}
     except ValueError:
         flash("Invalid date format. Please use YYYY-MM-DD.", "danger")
-        session['import_progress'] = {'message': 'Error: Invalid date format.', 'percentage': 0, 'status': 'error'}
         return redirect(url_for('.index'))
-
-    all_schedule_data = []
-    driver = None
-    try:
-        session['import_progress'] = {'message': 'Setting up browser driver...', 'percentage': 10, 'status': 'running'}
-        current_app.logger.info("Initializing WebDriver...")
-        driver = scraper.setup_driver()
-        
-        session['import_progress'] = {'message': 'Logging into portal...', 'percentage': 15, 'status': 'running'}
-        scraper.login_to_portal(driver, macid, password)
-        
-        session['import_progress'] = {'message': 'Navigating to weekly schedule page...', 'percentage': 20, 'status': 'running'}
-        scraper.navigate_to_weekly_schedule(driver) 
-
-        current_monday = start_date - timedelta(days=start_date.weekday())
-        loop_end_date = end_date
-
-        driver.switch_to.default_content()  # This is important! Otherwise, the first week will not be scraped correctly.
-        total_weeks = (loop_end_date - current_monday).days // 7 + 1
-        if total_weeks <= 0: total_weeks = 1  # Avoid division by zero
-
-        weeks_processed = 0
-        scraper_progress_start_percentage = 30
-        scraper_progress_range = 40  # Percentage allocated for scraping
-
-        while current_monday <= loop_end_date:
-            weeks_processed += 1
-            current_progress_percentage = scraper_progress_start_percentage
-            if total_weeks > 0:
-                current_progress_percentage += int((weeks_processed / total_weeks) * scraper_progress_range)
-            
-            session['import_progress'] = {
-                'message': f'Scraping week {weeks_processed}/{total_weeks} (starting {current_monday.strftime("%Y-%m-%d")})...',
-                'percentage': current_progress_percentage,
-                'status': 'running'
-            }
-            
-            weekly_events = scraper.scrape_week_data(driver, current_monday)
-            if weekly_events:
-                all_schedule_data.extend(weekly_events)
-            current_monday += timedelta(days=7)
-        
-        session['import_progress'] = {
-            'message': f'Scraping complete. Found {len(all_schedule_data)} events. Processing...',
-            'percentage': scraper_progress_start_percentage + scraper_progress_range,
-            'status': 'running'
-        }
-
-    except Exception as e:
-        current_app.logger.error(f"Error during scraping process: {e}", exc_info=True)
-        session['import_progress'] = {
-            'message': f'Error during scraping: {str(e)}',
-            'percentage': session.get('import_progress', {}).get('percentage', 20),
-            'status': 'error'
-        }
-        flash(f"An error occurred during scraping: {e}", "danger")
-        return redirect(url_for('.index'))
-    finally:
-        if driver:
-            current_app.logger.info("Closing Selenium driver.")
-            driver.quit()
-
-    if not all_schedule_data:
-        flash("No schedule data found for the given dates.", "info")
-        session['import_progress'] = {
-            'message': 'No schedule data found for the given dates.',
-            'percentage': 100,
-            'status': 'complete_with_info'
-        }
-        return redirect(url_for('.index'))
-
-    session['import_progress'] = {'message': 'Connecting to Google Calendar...', 'percentage': 75, 'status': 'running'}
-    gcal = gcal_service.get_calendar_service()
-    if not gcal:
-        flash("Could not connect to Google Calendar service. Please try authorizing again.", "danger")
-        session['import_progress'] = {
-            'message': 'Error: Could not connect to Google Calendar.',
-            'percentage': 75,
-            'status': 'error'
-        }
-        return redirect(url_for('.index'))
-
-    events_created_count = 0
-    events_failed_count = 0
-    total_events_to_create = len(all_schedule_data)
     
-    gcal_progress_start_percentage = 80
-    gcal_progress_range = 20  # Percentage allocated for calendar operations
-
-    for i, event_data in enumerate(all_schedule_data):
-        current_gcal_progress = gcal_progress_start_percentage
-        if total_events_to_create > 0:
-            current_gcal_progress += int(((i + 1) / total_events_to_create) * gcal_progress_range)
-
-        session['import_progress'] = {
-            'message': f'Adding event {i+1}/{total_events_to_create} to Google Calendar ({event_data.get("course", "Event")})...',
-            'percentage': current_gcal_progress,
-            'status': 'running'
-        }
-        
-        try:
-            if 'time' not in event_data or 'date' not in event_data:
-                current_app.logger.warning(f"Skipping event due to missing time/date: {event_data}")
-                events_failed_count += 1
-                continue
-            
-            created = gcal_service.create_calendar_event(gcal, event_data)
-            if created:
-                events_created_count += 1
-            else:
-                events_failed_count += 1
-        except Exception as e:
-            current_app.logger.error(f"Error creating calendar event for {event_data.get('course')}: {e}", exc_info=True)
-            events_failed_count += 1
-
-    final_message = f"Successfully created {events_created_count} events. Failed: {events_failed_count} events."
-    if events_created_count == 0 and events_failed_count > 0:
-        final_status = 'error'
-    elif events_failed_count > 0:
-        final_status = 'complete_with_warnings'
-    else:
-        final_status = 'complete'
+    # Start the background task with the Flask app
+    app = current_app._get_current_object()  # Get the actual app object, not the proxy
+    start_import_task(app, session_id, macid, password, start_date, end_date)
     
-    session['import_progress'] = {'message': final_message, 'percentage': 100, 'status': final_status}
-    flash(final_message, "success" if final_status == 'complete' else "warning")
-    
-    return redirect(url_for('.index'))
+    # Immediately return to the user with a parameter to trigger progress bar display
+    flash("Import process started. Please wait while we process your schedule.", "info")
+    return redirect(url_for('.index', import_started=1))
 
 # Need to register this blueprint in app/__init__.py
 # Modify app/__init__.py:

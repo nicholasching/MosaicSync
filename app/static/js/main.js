@@ -6,11 +6,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const progressContainer = document.getElementById('progress-container');
     const progressBar = document.getElementById('progress-bar');
     const progressMessage = document.getElementById('progress-message');
-    let intervalId = null;
-
-    if (importForm) {
+    let intervalId = null;    if (importForm) {
         importForm.addEventListener('submit', function(e) {
-            // First, reset any existing progress data
+            // First, reset any existing progress data and show progress bar immediately
+            if (progressContainer) progressContainer.style.display = 'block';
+            if (submitButton) submitButton.disabled = true;
+            if (progressMessage) progressMessage.textContent = 'Initializing import...';
+            if (progressBar) {
+                progressBar.style.width = '0%';
+                progressBar.textContent = '0%';
+                progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+                progressBar.classList.remove('bg-success', 'bg-danger', 'bg-warning'); // Reset colors
+            }
+            
+            // Reset progress on the server
             fetch('/reset_progress', {
                 method: 'POST',
                 headers: {
@@ -19,25 +28,25 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(() => {
                 console.log('Progress data reset successfully');
-                // Show progress bar and disable button on form submission
-                if (progressContainer) progressContainer.style.display = 'block';
-                if (submitButton) submitButton.disabled = true;
-                if (progressMessage) progressMessage.textContent = 'Initializing import...';
-                if (progressBar) {
-                    progressBar.style.width = '0%';
-                    progressBar.textContent = '0%';
-                    progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
-                    progressBar.classList.remove('bg-success', 'bg-danger', 'bg-warning'); // Reset colors
-                }
                 // Start polling for progress
                 startPollingProgress();
             })
             .catch(error => {
                 console.error('Error resetting progress data:', error);
-                // Continue with form submission anyway
+                // Continue anyway, polling will still work
+                startPollingProgress();
             });
             // Don't prevent default - allow the form to submit normally
         });
+        
+        // Also check for progress immediately if we're returning after submit
+        // (This will show the progress bar if we've just submitted the form)
+        const urlParams = new URLSearchParams(window.location.search);
+        const hasImportParam = document.referrer.includes('/import_schedule');
+        if (hasImportParam || urlParams.has('import_started')) {
+            if (progressContainer) progressContainer.style.display = 'block';
+            startPollingProgress();
+        }
     }
 
     function startPollingProgress() {
