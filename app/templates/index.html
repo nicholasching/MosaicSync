@@ -1,33 +1,32 @@
 {% extends "base.html" %}
 
-{% block title %}Import Schedule{% endblock %}
+{% block title %}Mosaic Sync{% endblock %}
 
 {% block content %}
 <div class="row">
-    <div class="col-lg-8 offset-lg-2">
-        <div class="app-header text-center">
+    <div class="col-lg-10 offset-lg-1">
+        <div class="app-header">
             <h1 class="app-title">Mosaic Sync</h1>
-            <p class="lead">Import your weekly schedule from Mosaic directly into your Google Calendar.</p>
-            <p class="text-muted small mt-2">
-                <i class="fas fa-shield-alt mr-1"></i>
-                <strong>Your MacID and password are processed locally on this tool and are not stored.</strong>
-            </p>
+            <p class="app-subtitle">Import your weekly schedule from Mosaic directly into your Google Calendar.</p>
         </div>
 
         <!-- Google Calendar Authorization Section -->
-        <div class="auth-container mb-4">
+        <div class="auth-container">
             {% if not gcal_authorized %}
-                <div class="alert alert-warning" role="alert">
-                    <i class="fas fa-exclamation-triangle mr-2"></i>
-                    You need to authorize access to your Google Calendar first.
+                <div class="app-card">
+                    <div class="text-center mb-4">
+                        <i class="fas fa-calendar-alt fa-3x mb-3" style="color: var(--primary-color);"></i>
+                        <h2 class="h4">Google Calendar Authorization Required</h2>
+                        <p class="text-secondary">You need to authorize access to your Google Calendar first.</p>
+                    </div>
+                    <a href="{{ url_for('main.authorize_gcal') }}" class="btn btn-primary auth-btn btn-block">
+                        <i class="fab fa-google mr-2"></i>
+                        Authorize Google Calendar
+                    </a>
                 </div>
-                <a href="{{ url_for('main.authorize_gcal') }}" class="btn btn-danger auth-btn">
-                    <i class="fab fa-google mr-2"></i>
-                    Authorize Google Calendar
-                </a>
             {% else %}
-                <div class="badge badge-success auth-badge">
-                    <i class="fas fa-check-circle mr-2"></i>
+                <div class="auth-badge">
+                    <i class="fas fa-check-circle"></i>
                     Google Calendar Authorized
                 </div>
             {% endif %}
@@ -35,31 +34,35 @@
 
         <!-- Import Form -->
         <div class="app-card form-card">
-            <h2 class="h4 mb-3"><i class="fas fa-calendar-plus mr-2"></i>Import Schedule</h2>
+            <h2 class="h4 mb-4"><i class="fas fa-calendar-plus mr-2"></i>Import Your Schedule</h2>
             <form id="importForm" method="POST" action="{{ url_for('main.import_schedule') }}">
                 <div class="form-group">
-                    <label for="macid"><i class="fas fa-user mr-1"></i> MacID (Username):</label>
+                    <label for="macid" class="form-label"><i class="fas fa-user mr-1"></i> MacID (Username)</label>
                     <input type="text" class="form-control" id="macid" name="macid" value="{{ macid_user }}" required>
                 </div>
-                <div class="form-group">
-                    <label for="password"><i class="fas fa-lock mr-1"></i> Password:</label>
+                <div class="form-group position-relative">
+                    <label for="password" class="form-label"><i class="fas fa-lock mr-1"></i> Password</label>
                     <input type="password" class="form-control" id="password" name="password" required>
-                    <small class="form-text text-muted">
-                        Your credentials are used only to access your schedule and are not saved.
+                    <button type="button" class="password-toggle" aria-label="Toggle password visibility">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <small class="form-text text-secondary mt-2">
+                        <i class="fas fa-shield-alt mr-1"></i>
+                        Your credentials are processed locally and never stored.
                     </small>
                 </div>
                 <div class="form-row">
                     <div class="form-group col-md-6">
-                        <label for="start_date"><i class="fas fa-calendar-day mr-1"></i> Start Date:</label>
+                        <label for="start_date" class="form-label"><i class="fas fa-calendar-day mr-1"></i> Start Date</label>
                         <input type="date" class="form-control" id="start_date" name="start_date" value="{{ default_start_date }}" required>
                     </div>
                     <div class="form-group col-md-6">
-                        <label for="end_date"><i class="fas fa-calendar-day mr-1"></i> End Date:</label>
+                        <label for="end_date" class="form-label"><i class="fas fa-calendar-day mr-1"></i> End Date</label>
                         <input type="date" class="form-control" id="end_date" name="end_date" value="{{ default_end_date }}" required>
                     </div>
                 </div>
                 <div class="form-submit">
-                    <button type="submit" id="submitImportBtn" class="btn btn-success btn-lg btn-block" {% if not gcal_authorized %}disabled{% endif %}>
+                    <button type="submit" id="submitImportBtn" class="btn btn-primary btn-lg btn-block" {% if not gcal_authorized %}disabled{% endif %}>
                         <i class="fas fa-sync mr-2"></i>
                         Import Schedule
                     </button>
@@ -69,26 +72,52 @@
 
         <!-- Progress Bar Section -->
         <div id="progress-container" class="progress-container mt-4" style="display: none;">
-            <h3 class="h5 mb-3"><i class="fas fa-spinner mr-2"></i>Import Progress</h3>
+            <h3 class="h5 mb-3"><i class="fas fa-spinner fa-spin mr-2"></i>Import Progress</h3>
             <p id="progress-message" class="mb-2">Starting import process...</p>
             <div class="progress">
-                <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                <div id="progress-bar" class="progress-bar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
             </div>
         </div>
 
         <!-- Information Section -->
-        <div class="info-section mt-4">
+        <div class="info-section">
+            <h3 class="h5 mb-3"><i class="fas fa-info-circle mr-2"></i>How It Works</h3>
             <div class="info-card">
-                <h3 class="h5"><i class="fas fa-info-circle mr-2"></i>How It Works</h3>
-                <ol class="pl-3 mb-0">
-                    <li>Authorize Google Calendar access (one-time step)</li>
-                    <li>Enter your McMaster ID and password</li>
-                    <li>Select the date range for your schedule</li>
-                    <li>Click "Import Schedule" and wait for the process to complete</li>
-                    <li>Check your Google Calendar for the imported events</li>
-                </ol>
+                <div class="info-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">Authorize Google Calendar access (one-time step)</div>
+                </div>
+                <div class="info-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">Enter your McMaster ID and password</div>
+                </div>
+                <div class="info-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">Select the date range for your schedule</div>
+                </div>
+                <div class="info-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">Click "Import Schedule" and wait for the process to complete</div>
+                </div>
+                <div class="info-step">
+                    <div class="step-number">5</div>
+                    <div class="step-content">Check your Google Calendar for the imported events</div>
+                </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // Add input focus effects
+        $('.form-control').focus(function() {
+            $(this).parent().addClass('input-focus');
+        }).blur(function() {
+            $(this).parent().removeClass('input-focus');
+        });
+    });
+</script>
 {% endblock %}

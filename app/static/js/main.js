@@ -1,155 +1,226 @@
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Schedule Importer main.js loaded.');
+    console.log('Mosaic Sync main.js loaded.');
 
+    // Form and progress elements
     const importForm = document.getElementById('importForm');
     const submitButton = document.getElementById('submitImportBtn');
     const progressContainer = document.getElementById('progress-container');
     const progressBar = document.getElementById('progress-bar');
     const progressMessage = document.getElementById('progress-message');
-    let intervalId = null;    if (importForm) {
-        importForm.addEventListener('submit', function(e) {
-            // First, reset any existing progress data and show progress bar immediately
+    let progressIntervalId = null; // Renamed to avoid conflict
+
+    // Background grid animation (subtle movement)
+    const body = document.querySelector('body');
+    if (body) {
+        let posX = 0;
+        let posY = 0;
+        setInterval(() => {
+            posX += 0.05;
+            posY += 0.05;
+            body.style.backgroundPosition = `${posX}px ${posY}px`;
+        }, 50);
+    }
+
+    // Function to fetch and update progress
+    async function fetchProgress() {
+        try {
+            const response = await fetch("/get_import_progress");
+            if (!response.ok) {
+                console.error('Failed to fetch progress', response.status);
+                if (progressMessage) progressMessage.textContent = 'Error fetching progress.';
+                return;
+            }
+            const data = await response.json();
+
+            if (progressBar) {
+                const roundedProgress = Math.floor(data.percentage || 0);
+                progressBar.style.width = roundedProgress + '%';
+                progressBar.textContent = roundedProgress + '%';
+                progressBar.setAttribute('aria-valuenow', roundedProgress);
+                // Ensure no error class persists if we are now processing or completed successfully
+                if (data.status !== 'error') {
+                    progressBar.classList.remove('bg-danger');
+                }
+            }
+            if (progressMessage) {
+                progressMessage.textContent = data.message || 'Processing...';
+            }
+
+            // Check for terminal states to stop polling
+            // Ensure these strings exactly match the statuses sent by task_manager.py
+            const terminalSuccessStates = ['complete', 'complete_with_info', 'complete_with_warnings']; // Changed 'completed' to 'complete'
+            const terminalErrorStates = ['error'];
+            const terminalStates = [...terminalSuccessStates, ...terminalErrorStates];
+
+            if (terminalStates.includes(data.status)) {
+                clearInterval(progressIntervalId);
+                
+                if (terminalSuccessStates.includes(data.status)) {
+                    if (progressMessage) progressMessage.textContent = data.message || 'Import complete!';
+                    if (progressBar) {
+                        progressBar.style.width = '100%';
+                        progressBar.textContent = '100%';
+                        progressBar.setAttribute('aria-valuenow', '100');
+                        progressBar.classList.remove('bg-danger'); // Ensure no error style
+                        progressBar.classList.add('bg-success');
+                    }
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = '<i class="fas fa-check-circle mr-2"></i> Done!';
+                    }
+                } else { // Error state
+                    if (progressMessage) progressMessage.textContent = data.message || 'An error occurred.';
+                    if (progressBar) {
+                        progressBar.classList.add('bg-danger');
+                        progressBar.classList.remove('bg-success');
+                    }
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i> Import Failed';
+                    }
+                }
+
+                // Optionally hide progress bar and reset button after a delay
+                setTimeout(() => {
+                    if (progressContainer) progressContainer.style.display = 'none';
+                    if (progressBar) {
+                        progressBar.style.width = '0%';
+                        progressBar.textContent = '0%';
+                        progressBar.setAttribute('aria-valuenow', '0');
+                        progressBar.classList.remove('bg-success', 'bg-danger');
+                    }
+                    if (submitButton) { // Reset button for another import
+                        submitButton.innerHTML = '<i class="fas fa-sync mr-2"></i> Import Schedule';
+                    }
+                }, 5000);
+
+            } else if (data.status === 'not_started' && progressContainer.style.display === 'block') {
+                console.log("Progress status: not_started, but UI was active. Continuing to poll.");
+            }
+        } catch (error) {
+            console.error('Error in fetchProgress:', error);
+            if (progressMessage) progressMessage.textContent = 'Failed to update progress.';
+        }
+    }
+
+    // Form submission and progress tracking
+    if (importForm) {
+        importForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
             if (progressContainer) progressContainer.style.display = 'block';
-            if (submitButton) submitButton.disabled = true;
-            if (progressMessage) progressMessage.textContent = 'Initializing import...';
             if (progressBar) {
                 progressBar.style.width = '0%';
                 progressBar.textContent = '0%';
-                progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
-                progressBar.classList.remove('bg-success', 'bg-danger', 'bg-warning'); // Reset colors
+                progressBar.setAttribute('aria-valuenow', '0');
+                progressBar.classList.remove('bg-success', 'bg-danger');
             }
-            
-            // Reset progress on the server
-            fetch('/reset_progress', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
+            if (progressMessage) progressMessage.textContent = 'Initializing import...';
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Processing...';
+            }
+
+            try {
+                const resetResponse = await fetch('/reset_progress', { method: 'POST' });
+                if (!resetResponse.ok) {
+                    const errorData = await resetResponse.json();
+                    throw new Error(errorData.message || 'Failed to reset import session.');
                 }
-            })
-            .then(() => {
-                console.log('Progress data reset successfully');
-                // Start polling for progress
-                startPollingProgress();
-            })
-            .catch(error => {
-                console.error('Error resetting progress data:', error);
-                // Continue anyway, polling will still work
-                startPollingProgress();
-            });
-            // Don't prevent default - allow the form to submit normally
-        });
-        
-        // Also check for progress immediately if we're returning after submit
-        // (This will show the progress bar if we've just submitted the form)
-        const urlParams = new URLSearchParams(window.location.search);
-        const hasImportParam = document.referrer.includes('/import_schedule');
-        if (hasImportParam || urlParams.has('import_started')) {
-            if (progressContainer) progressContainer.style.display = 'block';
-            startPollingProgress();
-        }
-    }
+                console.log("Import session reset successfully.");
 
-    function startPollingProgress() {
-        if (intervalId) {
-            clearInterval(intervalId); // Clear any existing interval
-        }
-        intervalId = setInterval(fetchProgress, 1500); // Poll every 1.5 seconds
-    }
+                const formData = new FormData(importForm);
+                const importResponse = await fetch(importForm.action, {
+                    method: 'POST',
+                    body: formData
+                });
 
-    function fetchProgress() {
-        fetch('/get_import_progress')
-            .then(response => response.json())
-            .then(data => {
-                if (progressContainer && progressBar && progressMessage) {
-                    // If status is 'not_started', don't update the progress bar
-                    if (data.status === 'not_started') {
-                        return;
-                    }
-                    
-                    progressMessage.textContent = data.message || 'Processing...';
-                    progressBar.style.width = (data.percentage || 0) + '%';
-                    progressBar.textContent = (data.percentage || 0) + '%';
+                const importResult = await importResponse.json();
 
-                    // Update progress bar color based on status
-                    progressBar.classList.remove('bg-success', 'bg-danger', 'bg-warning', 'progress-bar-striped', 'progress-bar-animated');
-                    if (data.status === 'complete') {
-                        progressBar.classList.add('bg-success');
-                        stopPollingProgress();
-                        if (submitButton) submitButton.disabled = false;
-                    } else if (data.status === 'complete_with_info' || data.status === 'complete_with_warnings') {
-                        progressBar.classList.add('bg-warning');
-                        stopPollingProgress();
-                        if (submitButton) submitButton.disabled = false;
-                    } else if (data.status === 'error') {
-                        progressBar.classList.add('bg-danger');
-                        stopPollingProgress();
-                        if (submitButton) submitButton.disabled = false;
-                    } else { // Still running
-                        progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
-                    }
+                if (importResponse.ok && importResult.status === 'success') {
+                    if (progressMessage) progressMessage.textContent = importResult.message || 'Import initiated. Fetching progress...';
+                    clearInterval(progressIntervalId);
+                    progressIntervalId = setInterval(fetchProgress, 1500);
+                    fetchProgress();
+                } else {
+                    throw new Error(importResult.message || 'Failed to start import process.');
                 }
-            })
-            .catch(error => {
-                console.error('Error fetching progress:', error);
-                if (progressMessage) progressMessage.textContent = 'Error fetching progress updates.';
+            } catch (error) {
+                console.error('Form submission error:', error);
+                if (progressMessage) progressMessage.textContent = error.message || 'Error starting import.';
                 if (progressBar) progressBar.classList.add('bg-danger');
-                stopPollingProgress(); // Stop polling on error
-                if (submitButton) submitButton.disabled = false;
-            });
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i> Import Failed';
+                }
+                if (progressContainer) {
+                    setTimeout(() => {
+                        progressContainer.style.display = 'none';
+                        if (progressBar) {
+                            progressBar.style.width = '0%';
+                            progressBar.textContent = '0%';
+                            progressBar.setAttribute('aria-valuenow', '0');
+                            progressBar.classList.remove('bg-danger');
+                        }
+                    }, 5000);
+                }
+            }
+        });
     }
 
-    function stopPollingProgress() {
-        if (intervalId) {
-            clearInterval(intervalId);
-            intervalId = null;
-        }
-        // Keep animated class if still in progress, remove if complete/error
-        if (progressBar && (progressBar.classList.contains('bg-success') || progressBar.classList.contains('bg-danger') || progressBar.classList.contains('bg-warning'))) {
-            progressBar.classList.remove('progress-bar-animated');
-        }
-    }
+    // Enhance form field interactions
+    const formControls = document.querySelectorAll('.form-control');
+    formControls.forEach(input => {
+        input.addEventListener('focus', function() {
+            this.parentElement.classList.add('input-focus');
+        });
 
-    // Check if there's a flash message indicating a just-completed import
-    const flashMessages = document.querySelectorAll('.alert');
-    let hasCompletionMessage = false;
-    
-    flashMessages.forEach(message => {
-        const messageText = message.textContent.toLowerCase();
-        if (messageText.includes('successfully created') || 
-            messageText.includes('no schedule data found') ||
-            messageText.includes('error occurred during')) {
-            hasCompletionMessage = true;
+        input.addEventListener('blur', function() {
+            this.parentElement.classList.remove('input-focus');
+        });
+
+        if (input.type === 'password') {
+            const toggleBtn = input.parentElement.querySelector('.password-toggle');
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', function() {
+                    if (input.type === 'password') {
+                        input.type = 'text';
+                        this.querySelector('i').className = 'fas fa-eye-slash';
+                    } else {
+                        input.type = 'password';
+                        this.querySelector('i').className = 'fas fa-eye';
+                    }
+                });
+            }
         }
     });
 
-    // Only show the final state if there's a completion message
-    if (hasCompletionMessage) {
-        // Make a single request to get the final state
-        fetch('/get_import_progress')
-            .then(response => response.json())
-            .then(data => {
-                if (data && (data.percentage === 100 || data.status === 'complete' || 
-                          data.status === 'complete_with_info' || data.status === 'complete_with_warnings' || 
-                          data.status === 'error')) {
-                    // If it's complete or error, just show final state
-                    if (progressContainer) progressContainer.style.display = 'block';
-                    if (progressMessage) progressMessage.textContent = data.message || 'Complete';
-                    if (progressBar) {
-                        progressBar.style.width = (data.percentage || 100) + '%';
-                        progressBar.textContent = (data.percentage || 100) + '%';
-                        
-                        if (data.status === 'complete' || data.status === 'complete_with_info') {
-                            progressBar.classList.add('bg-success');
-                        } else if (data.status === 'complete_with_warnings') {
-                            progressBar.classList.add('bg-warning');
-                        } else if (data.status === 'error') {
-                            progressBar.classList.add('bg-danger');
-                        }
-                    }
+    // Date range validation
+    const startDateInput = document.getElementById('start_date');
+    const endDateInput = document.getElementById('end_date');
+
+    if (startDateInput && endDateInput) {
+        startDateInput.addEventListener('change', validateDateRange);
+        endDateInput.addEventListener('change', validateDateRange);
+
+        function validateDateRange() {
+            const startDate = new Date(startDateInput.value);
+            const endDate = new Date(endDateInput.value);
+
+            if (startDate > endDate) {
+                endDateInput.setCustomValidity('End date must be after start date');
+
+                if (!document.querySelector('.date-error-message')) {
+                    const errorMsg = document.createElement('div');
+                    errorMsg.className = 'text-danger small mt-2 date-error-message';
+                    errorMsg.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i> End date must be after start date';
+                    endDateInput.parentElement.appendChild(errorMsg);
                 }
-            })
-            .catch(error => {
-                console.log("Could not retrieve final progress state", error);
-            });
+            } else {
+                endDateInput.setCustomValidity('');
+                const errorMsg = document.querySelector('.date-error-message');
+                if (errorMsg) errorMsg.remove();
+            }
+        }
     }
 });

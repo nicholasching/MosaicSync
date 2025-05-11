@@ -97,15 +97,14 @@ def get_import_progress():
 def import_schedule():
     current_app.logger.info("Import schedule route called.")
     
-    # Ensure we have a session ID for tracking this import
     if 'import_session_id' not in session:
         session['import_session_id'] = str(uuid.uuid4())
     
     session_id = session['import_session_id']
     
     if not os.path.exists(current_app.config['TOKEN_FILE']):
-        flash("Google Calendar not authorized. Please authorize first.", "danger")
-        return redirect(url_for('.index'))
+        current_app.logger.warning("Google Calendar not authorized during import attempt.")
+        return jsonify({'status': 'error', 'message': 'Google Calendar not authorized. Please authorize first.'}), 403
 
     macid = request.form.get('macid')
     password = request.form.get('password')
@@ -113,23 +112,21 @@ def import_schedule():
     end_date_str = request.form.get('end_date')
 
     if not all([macid, password, start_date_str, end_date_str]):
-        flash("All fields are required.", "danger")
-        return redirect(url_for('.index'))
+        current_app.logger.warning("Import failed due to missing fields.")
+        return jsonify({'status': 'error', 'message': 'All fields are required.'}), 400
 
     try:
         start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
         end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
     except ValueError:
-        flash("Invalid date format. Please use YYYY-MM-DD.", "danger")
-        return redirect(url_for('.index'))
+        current_app.logger.warning("Import failed due to invalid date format.")
+        return jsonify({'status': 'error', 'message': 'Invalid date format. Please use YYYY-MM-DD.'}), 400
     
-    # Start the background task with the Flask app
-    app = current_app._get_current_object()  # Get the actual app object, not the proxy
+    app = current_app._get_current_object()
     start_import_task(app, session_id, macid, password, start_date, end_date)
     
-    # Immediately return to the user with a parameter to trigger progress bar display
-    flash("Import process started. Please wait while we process your schedule.", "info")
-    return redirect(url_for('.index', import_started=1))
+    current_app.logger.info(f"Import task started for session_id: {session_id}")
+    return jsonify({'status': 'success', 'message': 'Import process initiated. Monitoring progress...'})
 
 # Need to register this blueprint in app/__init__.py
 # Modify app/__init__.py:

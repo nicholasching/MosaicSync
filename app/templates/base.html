@@ -3,24 +3,31 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>{% block title %}McMaster Schedule Importer{% endblock %}</title>
+    <title>{% block title %}Mosaic Sync{% endblock %}</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Bootstrap CSS -->
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css">
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Fix for form input text color issues in dark mode -->
+    <style>
+        .form-control, .form-control:focus {
+            color: white !important;
+            -webkit-text-fill-color: white !important;
+        }
+        input:-webkit-autofill,
+        input:-webkit-autofill:focus {
+            transition: background-color 600000s 0s, color 600000s 0s !important;
+        }
+    </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <nav class="navbar navbar-expand-md navbar-dark bg-primary mb-4">
-        <div class="container">
-            <a class="navbar-brand" href="{{ url_for('main.index') }}">
-                <i class="far fa-calendar-alt mr-2"></i>
-                Mosaic Sync
-            </a>
-        </div>
-    </nav>
     
     <main class="container app-container">
         <!-- Flash Messages -->
@@ -41,8 +48,8 @@
         {% block content %}{% endblock %}
         
         <!-- Footer -->
-        <footer class="mt-5 text-center text-muted">
-            <p class="small">McMaster Schedule Importer &copy; 2025</p>
+        <footer>
+            <p>Mosaic Sync &copy; 2025</p>
         </footer>
     </main>
 

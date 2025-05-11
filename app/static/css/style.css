@@ -1,88 +1,391 @@
-/* Schedule Importer Custom Styles */
+/* Mosaic Sync - Modern UI Design */
+
+:root {
+    --primary-color: #1a73e8;
+    --secondary-color: #ff4757;
+    --dark-bg: #121212;
+    --darker-bg: #0a0a0a;
+    --card-bg: #1e1e1e;
+    --text-primary: #ffffff;
+    --text-secondary: #b3b3b3;
+    --border-radius: 12px;
+    --box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+    --grid-lines: rgba(255, 255, 255, 0.05);
+    --success-color: #28a745;
+}
+
+/* Add text selection styling for better visibility */
+::selection {
+    background-color: var(--primary-color);
+    color: white !important;
+    text-shadow: none;
+}
+
+::-moz-selection {
+    background-color: var(--primary-color);
+    color: white !important;
+    text-shadow: none;
+}
+
+/* Explicitly force selected text to be white on primary color background */
+*::selection {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+}
+
+*::-moz-selection {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+}
+
 body {
-    background-color: #f8f9fa;
-    padding-bottom: 30px;
+    background-color: var(--dark-bg);
+    background-image: 
+        linear-gradient(var(--grid-lines) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-lines) 1px, transparent 1px);
+    background-size: 30px 30px;
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    justify-content: center;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 .app-container {
     max-width: 900px;
     margin: 0 auto;
+    position: relative;
+    z-index: 1;
 }
 
 .app-header {
-    margin-bottom: 2rem;
+    margin-bottom: 3rem;
     text-align: center;
-    color: #1a73e8;
 }
 
 .app-title {
     font-weight: 700;
-    margin-bottom: 0.5rem;
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    display: inline-block;
+}
+
+.app-subtitle {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    max-width: 80%;
+    margin: 0 auto;
 }
 
 .app-card {
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    padding: 2rem;
+    margin-bottom: 2rem;
+    background-color: var(--card-bg);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.app-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 20px rgba(0, 0, 0, 0.5);
 }
 
 .form-card {
-    background-color: white;
+    background-color: var(--card-bg);
+}
+
+.form-control {
+    background-color: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary) !important; /* Force text color */
+    -webkit-text-fill-color: var(--text-primary) !important; /* For webkit browsers */
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    caret-color: var(--primary-color) !important;
+}
+
+.form-control:focus {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.25);
+    outline: none;
+    color: var(--text-primary) !important; 
+    -webkit-text-fill-color: var(--text-primary) !important;
+}
+
+.form-control::placeholder {
+    color: rgba(255, 255, 255, 0.5) !important;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px var(--card-bg) inset !important;
+    -webkit-text-fill-color: var(--text-primary) !important;
+    transition: background-color 5000s ease-in-out 0s;
+    caret-color: var(--text-primary) !important;
+}
+
+.form-control::selection {
+    background-color: var(--primary-color);
+    color: white !important;
+}
+
+.form-control::-moz-selection {
+    background-color: var(--primary-color);
+    color: white !important;
+}
+
+.form-label {
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    display: block;
+}
+
+.input-focus .form-label {
+    color: var(--primary-color);
 }
 
 .form-submit {
-    margin-top: 1rem;
+    margin-top: 1.5rem;
+    text-align: center;
+}
+
+.btn {
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 0.9rem;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    border: none;
+}
+
+.btn-primary:hover {
+    background-color: #1557b9;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(21, 87, 185, 0.4);
+}
+
+.btn-secondary {
+    background-color: var(--secondary-color);
+    border: none;
+}
+
+.btn-secondary:hover {
+    background-color: #e03347;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(224, 51, 71, 0.4);
 }
 
 .progress-container {
     padding: 1.5rem;
-    background-color: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    background-color: var(--card-bg);
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .progress {
-    height: 25px;
-    margin-top: 0.5rem;
-    margin-bottom: 0.5rem;
+    height: 12px;
+    margin-top: 0.75rem;
+    margin-bottom: 0.75rem;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 50px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    border-radius: 50px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Add animated gradient shine effect to progress bar */
+.progress-bar::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg, 
+        rgba(255,255,255,0) 0%, 
+        rgba(255,255,255,0.2) 50%,
+        rgba(255,255,255,0) 100%
+    );
+    animation: shine 1.5s infinite;
+}
+
+@keyframes shine {
+    to {
+        left: 100%;
+    }
 }
 
 .auth-container {
     text-align: center;
-    margin-bottom: 1.5rem;
+    margin-bottom: 2rem;
 }
 
 .auth-badge {
     font-size: 1rem;
-    padding: 0.5rem 1rem;
+    padding: 0.5rem 1.25rem;
     border-radius: 50px;
+    background-color: rgba(40, 167, 69, 0.15);
+    color: var(--success-color);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.auth-badge i {
+    font-size: 0.85rem;
 }
 
 .auth-btn {
     border-radius: 50px;
-    padding: 0.5rem 1.5rem;
-    font-weight: 500;
+    padding: 0.75rem 2rem;
+    font-weight: 600;
+    background: linear-gradient(45deg, var(--primary-color), #4285f4);
+    border: none;
+    box-shadow: 0 4px 10px rgba(26, 115, 232, 0.3);
+}
+
+.auth-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(26, 115, 232, 0.4);
+    background: linear-gradient(45deg, #1557b9, #3a78e6);
 }
 
 .info-section {
-    font-size: 0.9rem;
-    color: #6c757d;
-    margin-top: 2rem;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    margin-top: 3rem;
 }
 
 .info-card {
-    padding: 1rem;
-    background-color: #e9ecef;
-    border-radius: 8px;
+    padding: 1.5rem;
+    background-color: rgba(255, 255, 255, 0.03);
+    border-radius: var(--border-radius);
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
+.info-step {
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.step-number {
+    width: 28px;
+    height: 28px;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.step-content {
+    flex: 1;
+}
+
+/* Removed live badge styles */
+
+footer {
+    margin-top: 4rem;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    opacity: 0.7;
+}
+
+/* Date picker styling */
+input[type="date"] {
+    background-color: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    position: relative; /* Needed for some custom icon approaches if filter fails */
+}
+
+/* Style the calendar picker icon for WebKit browsers */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1) brightness(100%); /* Inverts color (black to white) */
+    cursor: pointer;
+    opacity: 0.8; /* Adjust opacity if needed */
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+/* For Firefox, styling the icon is more restrictive and often not possible with simple CSS.
+   If the above doesn't work or for other browsers, a custom JS datepicker might be needed for full control. */
+
+/* Password toggle button styles */
+.password-toggle {
+    position: absolute !important;
+    right: 15px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    background: transparent !important;
+    border: none !important;
+    color: var(--text-secondary) !important;
+    cursor: pointer !important;
+    z-index: 5 !important;
+    padding: 8px !important;
+    outline: none !important;
+}
+
+.password-toggle:hover,
+.password-toggle:focus {
+    color: var(--text-primary) !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    box-shadow: none !important;
+}
+
+/* Position adjustment for password field to accommodate the toggle button */
+input[type="password"] {
+    padding-right: 45px !important;
+}
+
+/* Responsive adjustments */
 @media (max-width: 768px) {
     .app-card {
-        padding: 1rem;
+        padding: 1.5rem;
     }
     
     .auth-badge, .auth-btn {
         font-size: 0.9rem;
+    }
+    
+    .app-title {
+        font-size: 2rem;
     }
 }

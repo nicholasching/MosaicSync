@@ -192,13 +192,25 @@ def scrape_week_data(driver, current_monday):
         date_box.send_keys(current_monday.strftime("%d/%m/%Y"))
         time.sleep(0.2) # Short pause after sending keys
 
-        driver.find_element(By.ID, "DERIVED_CLASS_S_SSR_REFRESH_CAL$8$").click()
-        WebDriverWait(driver, 1).until(
+        refresh_button = driver.find_element(By.ID, "DERIVED_CLASS_S_SSR_REFRESH_CAL$8$")
+        refresh_button.click()
+        
+        # Wait for an element within the schedule to indicate it has reloaded.
+        # This could be the table itself or a specific known element.
+        # If the table reloads, an old reference to it would become stale.
+        # For simplicity, let's wait for the date box to update AND a brief pause for content to load.
+        # A more robust wait would be for a specific element in the schedule table to be present/visible again.
+        WebDriverWait(driver, 10).until(
             EC.text_to_be_present_in_element_value((By.ID, "DERIVED_CLASS_S_START_DT"), current_monday.strftime("%d/%m/%Y"))
         )
-        logging.info(f"Refreshed schedule for week: {current_monday.strftime('%d/%m/%Y')}")
-        time.sleep(1) # Wait for page to load completely
+        # Add a slightly longer, more reliable wait for the table to actually refresh its content.
+        # This might involve waiting for a specific element in the table to be stale and then reappear,
+        # or simply waiting for the loading indicator (if any) to disappear.
+        # For now, a slightly increased explicit wait after the date is confirmed.
+        time.sleep(1.5) # Increased wait for schedule content to refresh after date input confirmation
 
+        logging.info(f"Refreshed schedule for week: {current_monday.strftime('%d/%m/%Y')}")
+        
         soup = BeautifulSoup(driver.page_source, "html.parser")
         weekly_events = parse_html_to_events(soup, current_monday)
         
