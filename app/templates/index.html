@@ -61,6 +61,28 @@
                         <input type="date" class="form-control" id="end_date" name="end_date" value="{{ default_end_date }}" required>
                     </div>
                 </div>
+
+                {% if gcal_authorized %}
+                <div class="form-group">
+                    <label for="calendar_id" class="form-label"><i class="fas fa-calendar-check mr-1"></i> Select Target Calendar</label>
+                    <select class="form-control" id="calendar_id" name="calendar_id" required>
+                        <option value="" disabled selected>Loading calendars...</option>
+                        {% if calendars %}
+                            {% for calendar in calendars %}
+                                <option value="{{ calendar.id }}" {% if calendar.id == 'primary' %}selected{% endif %}>
+                                    {{ calendar.summary }}
+                                </option>
+                            {% endfor %}
+                        {% elif gcal_authorized %}
+                             <!-- JS will attempt to load -->
+                        {% else %}
+                            <option value="" disabled>Authorize Google Calendar to see options</option>
+                        {% endif %}
+                    </select>
+                    <small id="calendar-load-error" class="form-text text-danger" style="display: none;">Could not load calendars. Please try re-authorizing or refresh.</small>
+                </div>
+                {% endif %}
+
                 <div class="form-submit">
                     <button type="submit" id="submitImportBtn" class="btn btn-primary btn-lg btn-block" {% if not gcal_authorized %}disabled{% endif %}>
                         <i class="fas fa-sync mr-2"></i>

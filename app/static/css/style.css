@@ -114,6 +114,45 @@ body {
     caret-color: var(--primary-color) !important;
 }
 
+/* Style for select dropdown to match other form controls */
+select.form-control {
+    background-color: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary); /* Ensure text color is applied */
+    -webkit-text-fill-color: var(--text-primary); /* For webkit browsers */
+    border-radius: 8px;
+    padding: 0.75rem 1rem; /* Consistent padding */
+    height: calc(1.5em + 1.5rem + 2px); /* Match height of other inputs, adjust if necessary */
+    appearance: none; /* Remove default system appearance */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23ffffff%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.4-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E');
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 0.65em auto;
+}
+
+select.form-control:focus {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.25);
+    outline: none;
+    color: var(--text-primary);
+    -webkit-text-fill-color: var(--text-primary);
+}
+
+/* Style for option elements within the select */
+select.form-control option {
+    background-color: var(--card-bg); /* Dark background for options */
+    color: var(--text-primary); /* White text for options */
+    padding: 0.5rem 1rem; /* Add some padding to options for better readability */
+}
+
+/* Ensure select text is not cut off - adjust padding if needed */
+select.form-control {
+    padding-right: 2.5rem; /* Make space for custom arrow */
+}
+
 .form-control:focus {
     background-color: rgba(255, 255, 255, 0.1);
     border-color: var(--primary-color);

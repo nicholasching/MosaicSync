@@ -8,7 +8,10 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 # If modifying these SCOPES, delete the file token.json.
-SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
+SCOPES = [
+    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/calendar.readonly"  # Added to list calendars
+]
 CREDENTIALS_FILE = 'credentials.json' # Path to your downloaded OAuth credentials
 TOKEN_FILE = 'token.json'
 
@@ -23,6 +26,7 @@ def get_calendar_service():
     # created automatically when the authorization flow completes for the first
     # time.
     if os.path.exists(TOKEN_FILE):
+        # Ensure SCOPES includes all necessary permissions when loading credentials
         creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
@@ -30,8 +34,12 @@ def get_calendar_service():
             try:
                 creds.refresh(Request())
             except Exception as e:
-                logging.error(f"Error refreshing token: {e}. Please re-authenticate.")
-                os.remove(TOKEN_FILE) # Remove invalid token
+                logging.error(f"Error refreshing token: {e}. Token scopes: {creds.scopes if creds else 'N/A'}. Required scopes: {SCOPES}")
+                # Check if the scopes in the token are a subset of the required SCOPES
+                # If not, or if refresh fails for other reasons, force re-authentication.
+                if not creds.scopes or not set(SCOPES).issubset(set(creds.scopes)):
+                    logging.info("Token scopes do not match required scopes. Forcing re-authentication.")
+                os.remove(TOKEN_FILE) # Remove invalid or insufficient token
                 creds = None # Force re-authentication
         if not creds: # If still no creds (either never existed or refresh failed)
             if not os.path.exists(CREDENTIALS_FILE):
@@ -153,6 +161,21 @@ def create_calendar_event(service, scraped_event_data, calendar_id='primary'):
     except Exception as e:
         logging.error(f"An unexpected error occurred during event creation: {e}")
         return None
+
+def list_calendars(service):
+    """Lists the user's calendars."""
+    if not service:
+        logging.error("Calendar service is not available for listing calendars.")
+        return []
+    try:
+        calendar_list = service.calendarList().list().execute()
+        return calendar_list.get('items', [])
+    except HttpError as error:
+        logging.error(f"An error occurred listing calendars: {error}")
+        return []
+    except Exception as e:
+        logging.error(f"An unexpected error occurred while listing calendars: {e}")
+        return []
 
 if __name__ == "__main__":
     # This is for testing the gcal_service.py module directly

@@ -7,7 +7,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const progressContainer = document.getElementById('progress-container');
     const progressBar = document.getElementById('progress-bar');
     const progressMessage = document.getElementById('progress-message');
-    let progressIntervalId = null; // Renamed to avoid conflict
+    let progressIntervalId = null;
+
+    const calendarSelect = document.getElementById('calendar_id');
+    const calendarLoadError = document.getElementById('calendar-load-error');
 
     // Background grid animation (subtle movement)
     const body = document.querySelector('body');
@@ -100,6 +103,86 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             console.error('Error in fetchProgress:', error);
             if (progressMessage) progressMessage.textContent = 'Failed to update progress.';
+        }
+    }
+
+    // Function to load calendars into the dropdown
+    async function loadCalendars() {
+        if (!calendarSelect) return; // Should not happen if gcal is authorized, as element is conditional
+
+        // Check if calendars are pre-populated by the template.
+        // The template adds a "Loading..." option first, then actual calendars.
+        if (calendarSelect.options.length > 1 && 
+            calendarSelect.options[0].value === "" && 
+            calendarSelect.options[0].disabled) {
+            
+            console.log('Calendars pre-populated by template. Removing placeholder.');
+            calendarSelect.remove(0); // Remove the "Loading calendars..." placeholder
+
+            // Ensure an option is selected if the template didn't explicitly select one
+            // (e.g., no "primary" calendar was found by the template).
+            if (calendarSelect.options.length > 0 && calendarSelect.selectedIndex === -1) {
+                calendarSelect.options[0].selected = true;
+            }
+            return; // Calendars are already loaded and placeholder removed.
+        }
+
+        // If not pre-populated (or only placeholder exists), fetch them.
+        console.log('Fetching calendars dynamically...');
+        try {
+            const response = await fetch('/get_calendars');
+            const data = await response.json();
+
+            // Clear existing options (e.g., "Loading..." or error messages)
+            calendarSelect.innerHTML = ''; 
+
+            if (response.ok && data.status === 'success') {
+                if (data.calendars.length === 0) {
+                    const option = new Option('No calendars found in your account.', '');
+                    option.disabled = true;
+                    option.selected = true;
+                    calendarSelect.add(option);
+                    if (calendarLoadError) {
+                        calendarLoadError.textContent = 'No calendars found. Please ensure you have calendars in your Google account.';
+                        calendarLoadError.style.display = 'block';
+                    }
+                } else {
+                    let primarySelected = false;
+                    data.calendars.forEach(calendar => {
+                        const option = new Option(calendar.summary, calendar.id);
+                        calendarSelect.add(option);
+                        if (calendar.id === 'primary') {
+                            option.selected = true;
+                            primarySelected = true;
+                        }
+                    });
+                    if (!primarySelected && data.calendars.length > 0) {
+                        calendarSelect.options[0].selected = true; // Select the first one if primary not found
+                    }
+                    if (calendarLoadError) calendarLoadError.style.display = 'none';
+                }
+            } else {
+                console.error('Failed to load calendars:', data.message);
+                const errorOption = new Option('Error loading calendars', '');
+                errorOption.disabled = true;
+                errorOption.selected = true;
+                calendarSelect.add(errorOption);
+                if (calendarLoadError) {
+                    calendarLoadError.textContent = data.message || 'Could not load calendars. Please try re-authorizing or refresh.';
+                    calendarLoadError.style.display = 'block';
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching calendars:', error);
+            calendarSelect.innerHTML = ''; // Clear again
+            const catchErrorOption = new Option('Error fetching calendars', '');
+            catchErrorOption.disabled = true;
+            catchErrorOption.selected = true;
+            calendarSelect.add(catchErrorOption);
+            if (calendarLoadError) {
+                calendarLoadError.textContent = 'An unexpected error occurred while fetching calendars.';
+                calendarLoadError.style.display = 'block';
+            }
         }
     }
 
@@ -222,5 +305,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (errorMsg) errorMsg.remove();
             }
         }
+    }
+
+    // Initial actions on page load
+    if (calendarSelect) { 
+        loadCalendars();
     }
 });

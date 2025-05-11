@@ -26,7 +26,7 @@ task_progress = {}
 class ImportTask(threading.Thread):
     """Thread class for handling schedule imports in the background."""
     
-    def __init__(self, app, session_id, macid, password, start_date, end_date):
+    def __init__(self, app, session_id, macid, password, start_date, end_date, calendar_id): # Added calendar_id
         """Initialize the import task with user credentials and date range."""
         threading.Thread.__init__(self)
         self.daemon = True  # Make thread a daemon so it closes when the main app closes
@@ -36,6 +36,7 @@ class ImportTask(threading.Thread):
         self.password = password
         self.start_date = start_date
         self.end_date = end_date
+        self.calendar_id = calendar_id # Store calendar_id
         # Initialize task progress
         task_progress[session_id] = {
             "message": "Starting import process...",
@@ -155,7 +156,7 @@ class ImportTask(threading.Thread):
                                 events_failed_count += 1
                                 continue
                             
-                            created = gcal_service.create_calendar_event(gcal, event_data)
+                            created = gcal_service.create_calendar_event(gcal, event_data, self.calendar_id) # Pass calendar_id
                             if created:
                                 events_created_count += 1
                             else:
@@ -211,8 +212,8 @@ def get_task_progress(session_id):
     })
 
 
-def start_import_task(app, session_id, macid, password, start_date, end_date):
+def start_import_task(app, session_id, macid, password, start_date, end_date, calendar_id): # Added calendar_id
     """Start an import task in the background."""
-    task = ImportTask(app, session_id, macid, password, start_date, end_date)
+    task = ImportTask(app, session_id, macid, password, start_date, end_date, calendar_id) # Pass calendar_id
     task.start()
     return True

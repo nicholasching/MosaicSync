@@ -32,12 +32,26 @@ def index():
     gcal_authorized = os.path.exists(current_app.config['TOKEN_FILE'])
     current_app.logger.info(f"Google Calendar authorized: {gcal_authorized}")
 
+    # Fetch calendars if authorized
+    calendars = []
+    if gcal_authorized:
+        service = gcal_service.get_calendar_service()
+        if service:
+            # This is a synchronous call during page load.
+            # Consider moving to an async call from JS if it slows down page load significantly.
+            calendars_list_items = gcal_service.list_calendars(service)
+            calendars = [{"id": cal.get("id"), "summary": cal.get("summary")} for cal in calendars_list_items]
+            current_app.logger.info(f"Fetched {len(calendars)} calendars.")
+        else:
+            current_app.logger.warning("Could not get Google Calendar service to list calendars for index page.")
+
     return render_template(
         'index.html',
         default_start_date=default_start,
         default_end_date=default_end,
         macid_user=macid_user,
-        gcal_authorized=gcal_authorized
+        gcal_authorized=gcal_authorized,
+        calendars=calendars # Pass calendars to the template
     )
 
 @main_bp.route('/authorize_gcal')
@@ -93,6 +107,26 @@ def get_import_progress():
     progress_data = get_task_progress(session_id)
     return jsonify(progress_data)
 
+@main_bp.route('/get_calendars', methods=['GET'])
+def get_calendars():
+    current_app.logger.info("Get calendars route called.")
+    if not os.path.exists(current_app.config['TOKEN_FILE']):
+        return jsonify({'status': 'error', 'message': 'Google Calendar not authorized.', 'calendars': []}), 403
+
+    service = gcal_service.get_calendar_service()
+    if not service:
+        current_app.logger.error("Failed to get Google Calendar service for /get_calendars.")
+        return jsonify({'status': 'error', 'message': 'Could not connect to Google Calendar.', 'calendars': []}), 500
+
+    try:
+        calendar_items = gcal_service.list_calendars(service)
+        calendars = [{"id": cal.get("id"), "summary": cal.get("summaryOverride", cal.get("summary"))} for cal in calendar_items] # Use summaryOverride if available
+        current_app.logger.info(f"Successfully fetched {len(calendars)} calendars via /get_calendars.")
+        return jsonify({'status': 'success', 'calendars': calendars})
+    except Exception as e:
+        current_app.logger.error(f"Error fetching calendars in /get_calendars: {e}")
+        return jsonify({'status': 'error', 'message': f'An unexpected error occurred: {str(e)}', 'calendars': []}), 500
+
 @main_bp.route('/import_schedule', methods=['POST'])
 def import_schedule():
     current_app.logger.info("Import schedule route called.")
@@ -110,10 +144,11 @@ def import_schedule():
     password = request.form.get('password')
     start_date_str = request.form.get('start_date')
     end_date_str = request.form.get('end_date')
+    calendar_id = request.form.get('calendar_id') # Get selected calendar ID
 
-    if not all([macid, password, start_date_str, end_date_str]):
-        current_app.logger.warning("Import failed due to missing fields.")
-        return jsonify({'status': 'error', 'message': 'All fields are required.'}), 400
+    if not all([macid, password, start_date_str, end_date_str, calendar_id]): # Ensure calendar_id is also present
+        current_app.logger.warning("Import failed due to missing fields (including calendar_id).")
+        return jsonify({'status': 'error', 'message': 'All fields, including calendar selection, are required.'}), 400
 
     try:
         start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
@@ -123,9 +158,9 @@ def import_schedule():
         return jsonify({'status': 'error', 'message': 'Invalid date format. Please use YYYY-MM-DD.'}), 400
     
     app = current_app._get_current_object()
-    start_import_task(app, session_id, macid, password, start_date, end_date)
+    start_import_task(app, session_id, macid, password, start_date, end_date, calendar_id) # Pass calendar_id
     
-    current_app.logger.info(f"Import task started for session_id: {session_id}")
+    current_app.logger.info(f"Import task started for session_id: {session_id} for calendar {calendar_id}")
     return jsonify({'status': 'success', 'message': 'Import process initiated. Monitoring progress...'})
 
 # Need to register this blueprint in app/__init__.py
