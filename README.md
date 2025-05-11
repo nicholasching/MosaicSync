@@ -170,7 +170,3 @@ This project uses PyInstaller to bundle the Flask application into a standalone 
 - Credentials are only stored in your local `.env` file and not transmitted beyond the authentication with Mosaic.
 - Google Calendar access is obtained through OAuth 2.0, which does not expose your Google password.
 - The application requests only the minimum required permissions to create calendar events.
-
-## License
-
-[MIT License](LICENSE)
