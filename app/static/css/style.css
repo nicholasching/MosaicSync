@@ -291,10 +291,14 @@ input:-webkit-autofill:active {
 }
 
 .info-step {
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
     display: flex;
     align-items: flex-start;
     gap: 1rem;
+}
+
+.info-step:last-child {
+    margin-bottom: 0;
 }
 
 .step-number {
