@@ -1,4 +1,5 @@
 import os
+import sys  # Added sys import
 import datetime
 import logging
 from google.auth.transport.requests import Request
@@ -12,8 +13,20 @@ SCOPES = [
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/calendar.readonly"  # Added to list calendars
 ]
-CREDENTIALS_FILE = 'credentials.json' # Path to your downloaded OAuth credentials
-TOKEN_FILE = 'token.json'
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        # Running in a PyInstaller bundle (frozen)
+        base_path = sys._MEIPASS
+    else:
+        # Running in a normal Python environment
+        base_path = os.path.dirname(os.path.abspath(__file__))
+
+    return os.path.join(base_path, relative_path)
+
+CREDENTIALS_FILE = resource_path('credentials.json')
+TOKEN_FILE = resource_path('token.json')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 

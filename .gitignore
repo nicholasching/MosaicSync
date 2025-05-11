@@ -5,7 +5,6 @@ __pycache__/
 *.pyd
 *build/
 *develop-eggs/
-*dist/
 *downloads/
 *eggs/
 *.egg-info/
