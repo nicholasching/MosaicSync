@@ -2,6 +2,10 @@
 
 A web application that scrapes your McMaster University course schedule from Mosaic and imports it directly into Google Calendar.
 
+
+https://github.com/user-attachments/assets/a1a18a10-496c-4392-b997-4abd2f2f9a99
+
+
 ## Features
 
 - **Automated Scraping**: Log in to Mosaic and extract your course schedule automatically.
